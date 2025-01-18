@@ -12,6 +12,8 @@ const pool = new Pool({
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 });
 
+const cors = require('cors');
+
 // Test de verbinding
 pool.connect()
     .then(() => console.log('✅ PostgreSQL Database verbonden'))
