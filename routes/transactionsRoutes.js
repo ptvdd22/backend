@@ -10,6 +10,7 @@ const {
     getCategories,
     splitTransaction,
     getLabels
+   
 } = require('../controllers/transactionsController');
 
 // Haal alle transacties op

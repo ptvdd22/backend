@@ -427,6 +427,9 @@ exports.splitTransaction = async (req, res) => {
             insertedTransactions.push(rows[0]);
         }
 
+       
+        
+
         console.log('✅ Gesplitste transacties toegevoegd:', insertedTransactions);
         res.status(200).json(insertedTransactions);
     } catch (error) {

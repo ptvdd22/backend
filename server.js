@@ -17,6 +17,7 @@ configureMiddleware(app);
 
 // 📌 Routes koppelen
 loadRoutes(app);
+console.log('Routes geladen.');
 
 // ✅ Health Check Endpoint
 app.get('/api/health', (req, res) => {
