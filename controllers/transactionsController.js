@@ -16,7 +16,7 @@ exports.getAllTransactions = async (req, res) => {
                 t.tegenrekeninghouder,
                 t.betaalwijze,
                 t.omschrijving,
-                t.type,
+                t.person,
                 c.naam AS categorie,
                 l.naam AS label
             FROM transactions t
@@ -89,21 +89,21 @@ exports.getTransactionsWithoutLabel = async (req, res) => {
 // Update transactie
 exports.updateTransaction = async (req, res) => {
     const { id } = req.params;
-    const { category_id, label_id, type } = req.body;
+    const { category_id, label_id, person } = req.body;
 
     try {
-        console.log('📥 Ontvangen data:', { category_id, label_id, type });
+        console.log('📥 Ontvangen data:', { category_id, label_id, person });
 
         const query = `
             UPDATE transactions
             SET 
                 category_id = COALESCE($1, category_id),
                 label_id = COALESCE($2, label_id),
-                type = COALESCE($3, type)
+                person = COALESCE($3, person)
             WHERE id = $4
             RETURNING *;
         `;
-        const values = [category_id, label_id, type, id];
+        const values = [category_id, label_id, person, id];
 
         const { rows } = await pool.query(query, values); // ✅ Gebruik "pool.query"
 
@@ -377,8 +377,8 @@ exports.splitTransaction = async (req, res) => {
         // Voeg de gesplitste transacties toe
         const insertedTransactions = [];
         for (const [index, split] of splits.entries()) {
-            const newId = `${originalId}.${index + 1}`; // Nieuw ID zoals "3085.1"
-            const newReference = `${originalData.referentie}.${index + 1}`; // Nieuwe referentie zoals "ABC123.1"
+            const newId = `${originalId}.${index + 1}`; 
+            const newReference = `${originalData.referentie}.${index + 1}`; 
 
             const { rows } = await pool.query(
                 `INSERT INTO transactions (
@@ -389,6 +389,7 @@ exports.splitTransaction = async (req, res) => {
                     tegenrekeninghouder,
                     category_id,
                     label_id,
+                    person,
                     rekeningnummer,
                     valutacode,
                     tegenrekeningnummer,
@@ -401,7 +402,7 @@ exports.splitTransaction = async (req, res) => {
                     adres,
                     referentie, -- Hernoemde referentie
                     boekdatum
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING *`,
                 [
                     newId,                          // Nieuw ID
                     originalData.transactiedatum,  // Datum van originele transactie
@@ -409,7 +410,8 @@ exports.splitTransaction = async (req, res) => {
                     parseFloat(split.bedrag),      // Bedrag van de splitsing
                     originalData.tegenrekeninghouder, // Tegenrekeninghouder
                     split.category_id || null,     // Categorie ID
-                    split.label_id || null,        // Label ID
+                    split.label_id || null,         // Label ID
+                    split.person || null,           // Persoon
                     originalData.rekeningnummer,   // Rekeningnummer
                     originalData.valutacode,       // Valutacode
                     originalData.tegenrekeningnummer, // Tegenrekeningnummer
@@ -426,6 +428,9 @@ exports.splitTransaction = async (req, res) => {
             );
             insertedTransactions.push(rows[0]);
         }
+
+       
+        
 
         console.log('✅ Gesplitste transacties toegevoegd:', insertedTransactions);
         res.status(200).json(insertedTransactions);

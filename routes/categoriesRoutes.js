@@ -5,7 +5,8 @@ const {
     addCategory,
     updateCategory,
     deleteCategory,
-    suggestCategories, 
+    suggestCategories,
+    getCategoryExpenses
 } = require('../controllers/categoriesController');
 
 // Haal alle categorieën op
@@ -22,5 +23,9 @@ router.delete('/:id', deleteCategory);
 
 // Haal suggesties voor categorieën
 router.get('/suggest', suggestCategories);
+
+// Route om uitgaven per categorie op te halen
+router.get('/expenses', getCategoryExpenses);
+
 
 module.exports = router;

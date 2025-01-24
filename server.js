@@ -31,3 +31,4 @@ app.listen(PORT, () => {
     console.log(`🚀 Server draait op poort ${PORT}`);
 });
 
+module.exports = loadRoutes;

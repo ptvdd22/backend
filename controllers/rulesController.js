@@ -2,17 +2,17 @@ const pool = require('../db');
 
 // Voeg een regel toe
 exports.addRule = async (req, res) => {
-    const { tegenrekeningnummer, tegenrekeninghouder, categoryId, labelId, type } = req.body;
+    const { tegenrekeninghouder, tegenrekeningnummer, categoryId, labelId, person } = req.body;
 
-    if (!tegenrekeningnummer || !tegenrekeninghouder || !categoryId || !type) {
-        return res.status(400).json({ error: '❌ Tegenrekeningnummer, tegenrekeninghouder en categorie zijn verplicht.' });
+    if (!tegenrekeninghouder || !categoryId) {
+        return res.status(400).json({ error: '❌ Tegenrekeninghouder en categorie zijn verplicht.' });
     }
 
     try {
         await pool.query(
-            `INSERT INTO rules (tegenrekeningnummer, tegenrekeninghouder, category_id, label_id, type)
+            `INSERT INTO rules (tegenrekeningnummer, tegenrekeninghouder, category_id, label_id, person)
             VALUES ($1, $2, $3, $4, $5)`,
-           [tegenrekeningnummer, tegenrekeninghouder, categoryId, labelId || null, type]
+           [tegenrekeningnummer || null, tegenrekeninghouder, categoryId, labelId || null, person || null]
        );
 
         res.status(201).json({ message: '✅ Regel succesvol toegevoegd!' });
@@ -32,7 +32,7 @@ exports.applyRules = async (req, res) => {
                 r.tegenrekeningnummer, 
                 r.tegenrekeninghouder, 
                 r.category_id, 
-                r.type,
+                r.person,
                 r.label_id
             FROM rules r
         `);
@@ -47,9 +47,9 @@ exports.applyRules = async (req, res) => {
                 `UPDATE transactions
                  SET category_id = $1, 
                      label_id = $2,
-                     type = $3
+                     person = $3
                  WHERE (tegenrekeninghouder = $4 OR tegenrekeningnummer = $5)`,
-                [rule.category_id, rule.label_id, rule.type || null, rule.tegenrekeninghouder, rule.tegenrekeningnummer]
+                [rule.category_id, rule.label_id, rule.person || null, rule.tegenrekeninghouder, rule.tegenrekeningnummer]
             );
             
 
@@ -73,7 +73,7 @@ exports.getRules = async (req, res) => {
                 r.tegenrekeninghouder, 
                 COALESCE(c.naam, '') AS categorie, 
                 COALESCE(l.naam, '') AS label,
-                r.type
+                r.person
             FROM rules r
             LEFT JOIN categories c ON r.category_id = c.id
             LEFT JOIN labels l ON r.label_id = l.id
@@ -108,9 +108,9 @@ exports.deleteRule = async (req, res) => {
 // Update een regel
 exports.updateRule = async (req, res) => {
     const { id } = req.params;
-    const { tegenrekeningnummer, tegenrekeninghouder, categorie, label, type } = req.body;
+    const { tegenrekeningnummer, tegenrekeninghouder, categorie, label, person } = req.body;
 
-    if (!tegenrekeningnummer || !tegenrekeninghouder || !categorie || !type) {
+    if (!tegenrekeningnummer || !tegenrekeninghouder || !categorie || !person) {
         return res.status(400).json({ error: '❌ Alle velden zijn verplicht.' });
     }
 
@@ -123,9 +123,9 @@ exports.updateRule = async (req, res) => {
 
         const result = await pool.query(
             `UPDATE rules 
-             SET tegenrekeningnummer = $1, tegenrekeninghouder = $2, category_id = $3, label_id = $4, type = $5 
+             SET tegenrekeningnummer = $1, tegenrekeninghouder = $2, category_id = $3, label_id = $4, person = $5 
              WHERE id = $6`,
-            [tegenrekeningnummer, tegenrekeninghouder, categoryId, labelId, type, id]
+            [tegenrekeningnummer, tegenrekeninghouder, categoryId, labelId, person, id]
         );
 
         if (result.rowCount === 0) {
@@ -149,7 +149,7 @@ exports.applyRules = async (req, res) => {
                 r.tegenrekeningnummer, 
                 r.tegenrekeninghouder, 
                 r.category_id, 
-                r.type,
+                r.person,
                 r.label_id
             FROM rules r
         `);
@@ -163,9 +163,9 @@ exports.applyRules = async (req, res) => {
                 `UPDATE transactions
                  SET category_id = $1, 
                      label_id = $2,
-                     type = $3
+                     person = $3
                  WHERE (tegenrekeninghouder = $4 OR tegenrekeningnummer = $5)`,
-                [rule.category_id, rule.label_id, rule.type || null, rule.tegenrekeninghouder, rule.tegenrekeningnummer]
+                [rule.category_id, rule.label_id, rule.person || null, rule.tegenrekeninghouder, rule.tegenrekeningnummer]
             );
             rulesApplied += result.rowCount; // Tel het aantal bijgewerkte transacties
         }
@@ -180,4 +180,3 @@ exports.applyRules = async (req, res) => {
         res.status(500).json({ error: '❌ Fout bij toepassen van regels' });
     }
 };
-

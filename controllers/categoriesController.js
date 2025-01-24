@@ -86,7 +86,34 @@ exports.suggestCategories = async (req, res) => {
         res.status(200).json(result.rows);
     } catch (err) {
         console.error('❌ Fout bij ophalen van categorie-suggesties:', err.message);
-        res.status(500).json({ error: '❌ Serverfout bij ophalen categorie-suggesties' });
+        res.status(500).json({ error: '❌ Serverfout bij ophalen categorie-suggesties.' });
     }
 };
 
+// ✅ Query voor categorieën en uitgaven per maand
+exports.getCategoryExpenses = async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                c.naam AS category,
+                COALESCE(SUM(CASE 
+                    WHEN DATE_PART('month', t.transactiedatum) = DATE_PART('month', CURRENT_DATE) 
+                    THEN t.bedrag ELSE 0 END), 0)::NUMERIC AS current_month,
+                COALESCE(SUM(CASE 
+                    WHEN DATE_PART('month', t.transactiedatum) = DATE_PART('month', CURRENT_DATE) - 1 
+                    THEN t.bedrag ELSE 0 END), 0)::NUMERIC AS previous_month,
+                COALESCE(SUM(t.bedrag) / NULLIF(EXTRACT(YEAR FROM AGE(MIN(t.transactiedatum))) * 12 
+                    + EXTRACT(MONTH FROM AGE(MIN(t.transactiedatum))), 0), 0)::NUMERIC AS average_per_month
+            FROM categories c
+            LEFT JOIN transactions t ON c.id = t.category_id
+            GROUP BY c.naam
+            ORDER BY c.naam;
+
+        `;
+        const { rows } = await pool.query(query);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('❌ Fout bij ophalen categorie-uitgaven:', err.message);
+        res.status(500).json({ error: 'Serverfout bij ophalen categorie-uitgaven.' });
+    }
+};
