@@ -4,7 +4,7 @@ module.exports = (app) => {
         { path: '/api/categories', module: './categoriesRoutes' },
         { path: '/api/rules', module: './rulesRoutes' },
         { path: '/api/transactions', module: './transactionsRoutes' },
-       
+        { path: '/api/stats', module: './statsRoutes' },  
 
     ];
 
