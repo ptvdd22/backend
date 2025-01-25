@@ -3,23 +3,16 @@ const router = express.Router();
 const upload = require('../middlewares/multerConfig');
 const {
     getAllTransactions,
-    getUncategorizedTransactions,
-    getTransactionsWithoutLabel,
     updateTransaction,
     importTransactions,
     getCategories,
     splitTransaction,
-    getLabels
+    getLabels,
+    getUncategorizedTransactions
 } = require('../controllers/transactionsController');
 
 // Haal alle transacties op
 router.get('/', getAllTransactions);
-
-// Haal transacties zonder categorie op
-router.get('/uncategorized', getUncategorizedTransactions);
-
-// Haal transacties zonder label op
-router.get('/no-label', getTransactionsWithoutLabel);
 
 // Update een transactie
 router.put('/:id', updateTransaction);
@@ -33,5 +26,8 @@ router.get('/labels', getLabels);
 
 // Split transactie
 router.post('/split', splitTransaction);
+
+router.get('/uncategorized', getUncategorizedTransactions);
+
 
 module.exports = router;

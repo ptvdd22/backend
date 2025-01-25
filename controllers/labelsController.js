@@ -14,12 +14,28 @@ exports.getAllLabels = async (req, res) => {
 // Voeg een label toe
 exports.addLabel = async (req, res) => {
     const { naam } = req.body;
+
+    // Validatie: naam is verplicht
+    if (!naam || naam.trim() === '') {
+        return res.status(400).json({ error: '❌ De naam van het label is verplicht.' });
+    }
+
     try {
-        await pool.query('INSERT INTO labels (naam) VALUES ($1)', [naam]);
-        res.status(201).json({ message: '✅ Label toegevoegd' });
+        // Controleer of het label al bestaat
+        const existingLabel = await pool.query('SELECT * FROM labels WHERE naam = $1', [naam]);
+        if (existingLabel.rowCount > 0) {
+            return res.status(409).json({ error: '❌ Label met deze naam bestaat al.' });
+        }
+
+        // Voeg het label toe
+        const result = await pool.query(
+            'INSERT INTO labels (naam) VALUES ($1) RETURNING *',
+            [naam]
+        );
+        res.status(201).json(result.rows[0]);
     } catch (err) {
         console.error('❌ Fout bij toevoegen van label:', err.message);
-        res.status(500).json({ error: '❌ Serverfout bij toevoegen label' });
+        res.status(500).json({ error: '❌ Serverfout bij toevoegen van label.' });
     }
 };
 

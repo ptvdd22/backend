@@ -32,60 +32,6 @@ exports.getAllTransactions = async (req, res) => {
     }
 };
 
-// Haal transacties zonder categorie op
-exports.getUncategorizedTransactions = async (req, res) => {
-    try {
-        const query = `
-            SELECT 
-                id,
-                rekeningnummer,
-                TO_CHAR(transactiedatum, 'DD-MM-YYYY') AS transactiedatum,
-                creditdebet,
-                CAST(bedrag AS FLOAT) AS bedrag,
-                tegenrekeningnummer,
-                tegenrekeninghouder,
-                betaalwijze,
-                omschrijving,
-                category_id
-            FROM transactions
-            WHERE category_id IS NULL
-            ORDER BY transactiedatum DESC;
-        `;
-        const { rows } = await pool.query(query);
-        res.status(200).json(rows);
-    } catch (err) {
-        console.error('❌ Fout bij ophalen transacties zonder categorie:', err.message);
-        res.status(500).json({ error: '❌ Serverfout bij ophalen transacties zonder categorie' });
-    }
-};
-
-// Haal transacties zonder label op
-exports.getTransactionsWithoutLabel = async (req, res) => {
-    try {
-        const query = `
-            SELECT 
-                id,
-                rekeningnummer,
-                TO_CHAR(transactiedatum, 'DD-MM-YYYY') AS transactiedatum,
-                creditdebet,
-                CAST(bedrag AS FLOAT) AS bedrag,
-                tegenrekeningnummer,
-                tegenrekeninghouder,
-                betaalwijze,
-                omschrijving,
-                label_id
-            FROM transactions
-            WHERE label_id IS NULL
-            ORDER BY transactiedatum DESC;
-        `;
-        const { rows } = await pool.query(query);
-        res.status(200).json(rows);
-    } catch (err) {
-        console.error('❌ Fout bij ophalen transacties zonder label:', err.message);
-        res.status(500).json({ error: '❌ Serverfout bij ophalen transacties zonder label' });
-    }
-};
-
 // Update transactie
 exports.updateTransaction = async (req, res) => {
     const { id } = req.params;
@@ -427,15 +373,39 @@ exports.splitTransaction = async (req, res) => {
                 ]
             );
             insertedTransactions.push(rows[0]);
-        }
-
-       
-        
+        }     
 
         console.log('✅ Gesplitste transacties toegevoegd:', insertedTransactions);
         res.status(200).json(insertedTransactions);
     } catch (error) {
         console.error('❌ Backendfout bij splitsen transactie:', error.message);
         res.status(500).json({ error: `❌ Serverfout bij splitsen transactie: ${error.message}` });
+    }
+};
+
+// transacties zonder categorie
+exports.getUncategorizedTransactions = async (req, res) => {
+    try {
+        const result = await pool.query(`
+           SELECT 
+            t.id,
+            t.rekeningnummer,
+            TO_CHAR(t.transactiedatum, 'DD-MM-YYYY') AS transactiedatum, -- Datum formatteren
+            t.creditdebet,
+            CAST(t.bedrag AS FLOAT) AS bedrag,
+            t.tegenrekeningnummer,
+            t.tegenrekeninghouder,
+            t.betaalwijze,
+            t.omschrijving,
+            t.person
+            FROM transactions t
+            WHERE t.category_id IS NULL
+            ORDER BY t.transactiedatum DESC;
+
+        `);
+        res.status(200).json(result.rows);
+    } catch (err) {
+        console.error('❌ Fout bij ophalen transacties zonder categorie:', err.message);
+        res.status(500).json({ error: 'Serverfout bij ophalen transacties zonder categorie.' });
     }
 };

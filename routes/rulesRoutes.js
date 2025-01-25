@@ -5,7 +5,7 @@ const {
     applyRules,
     getRules,
     deleteRule,
-    updateRule
+    updateRule,
 } = require('../controllers/rulesController');
 
 // Voeg een regel toe
@@ -22,8 +22,5 @@ router.delete('/:id', deleteRule);
 
 // Update een regel
 router.put('/:id', updateRule);
-
-// Toepassen regels op import
-router.post('/apply', applyRules);
 
 module.exports = router;

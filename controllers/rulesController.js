@@ -110,34 +110,40 @@ exports.updateRule = async (req, res) => {
     const { id } = req.params;
     const { tegenrekeningnummer, tegenrekeninghouder, categorie, label, person } = req.body;
 
-    if (!tegenrekeningnummer || !tegenrekeninghouder || !categorie || !person) {
-        return res.status(400).json({ error: '❌ Alle velden zijn verplicht.' });
+    // Alleen rekeninghouder is verplicht
+    if (!tegenrekeninghouder || tegenrekeninghouder.trim() === '') {
+        return res.status(400).json({ error: '❌ Tegenrekeninghouder is verplicht.' });
     }
 
     try {
-        const categoryResult = await pool.query('SELECT id FROM categories WHERE naam = $1', [categorie]);
+        const categoryResult = categorie
+            ? await pool.query('SELECT id FROM categories WHERE naam = $1', [categorie])
+            : { rows: [{ id: null }] };
         const categoryId = categoryResult.rows[0]?.id;
 
-        const labelResult = await pool.query('SELECT id FROM labels WHERE naam = $1', [label]);
-        const labelId = labelResult.rows[0]?.id || null;
+        const labelResult = label
+            ? await pool.query('SELECT id FROM labels WHERE naam = $1', [label])
+            : { rows: [{ id: null }] };
+        const labelId = labelResult.rows[0]?.id;
 
         const result = await pool.query(
             `UPDATE rules 
              SET tegenrekeningnummer = $1, tegenrekeninghouder = $2, category_id = $3, label_id = $4, person = $5 
              WHERE id = $6`,
-            [tegenrekeningnummer, tegenrekeninghouder, categoryId, labelId, person, id]
+            [tegenrekeningnummer || null, tegenrekeninghouder, categoryId, labelId, person || null, id]
         );
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ error: '❌ Regel niet gevonden' });
+            return res.status(404).json({ error: '❌ Regel niet gevonden.' });
         }
 
-        res.status(200).json({ message: '✅ Regel succesvol bijgewerkt' });
+        res.status(200).json({ message: '✅ Regel succesvol bijgewerkt.' });
     } catch (err) {
         console.error('❌ Fout bij bijwerken van regel:', err.message);
-        res.status(500).json({ error: '❌ Serverfout bij bijwerken van regel' });
+        res.status(500).json({ error: '❌ Serverfout bij bijwerken van regel.' });
     }
 };
+
 
 
 // checkt of er regels zijn voor import
@@ -179,4 +185,34 @@ exports.applyRules = async (req, res) => {
         console.error('❌ Fout bij toepassen van regels:', err.message);
         res.status(500).json({ error: '❌ Fout bij toepassen van regels' });
     }
+
+    exports.getCategorySuggestions = async (req, res) => {
+        const { query } = req.query; // Haal de zoekterm uit de querystring
+        if (!query || query.trim() === '') {
+            return res.status(400).json({ error: 'Query mag niet leeg zijn' });
+        }
+    
+        try {
+            const categories = await pool.query(
+                'SELECT id, naam FROM categories WHERE naam ILIKE $1',
+                [`%${query}%`]
+            );
+            res.status(200).json(categories.rows);
+        } catch (err) {
+            console.error('❌ Fout bij ophalen categorie-suggesties:', err.message);
+            res.status(500).json({ error: 'Serverfout bij ophalen categorie-suggesties.' });
+        }
+    };
+    
+    
+    exports.getLabelSuggestions = async (req, res) => {
+        const { query = '' } = req.query;
+        try {
+            const labels = await pool.query(`SELECT id, naam FROM labels WHERE naam ILIKE $1`, [`%${query}%`]);
+            res.status(200).json(labels.rows);
+        } catch (err) {
+            res.status(500).json({ error: 'Serverfout bij ophalen van labels' });
+        }
+    };
+    
 };
