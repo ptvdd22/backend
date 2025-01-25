@@ -3,7 +3,8 @@ const pool = require('../db'); // Zorg ervoor dat je databaseconfiguratie goed i
 // Haal alle categorieën op
 exports.getAllCategories = async (req, res) => {
     try {
-        const { rows } = await pool.query('SELECT id, naam, icon FROM categories ORDER BY naam ASC');
+        // Haal ook de 'type' kolom op
+        const { rows } = await pool.query('SELECT id, naam, icon, type FROM categories ORDER BY naam ASC');
         res.status(200).json(rows);
     } catch (err) {
         console.error('❌ Fout bij ophalen van categorieën:', err.message);
@@ -11,12 +12,11 @@ exports.getAllCategories = async (req, res) => {
     }
 };
 
-
 // Voeg een categorie toe
 exports.addCategory = async (req, res) => {
-    const { naam, icon } = req.body;
+    const { naam, icon, type } = req.body;
     try {
-        await pool.query('INSERT INTO categories (naam, icon) VALUES ($1, $2)', [naam, icon]);
+        await pool.query('INSERT INTO categories (naam, icon, type) VALUES ($1, $2, $3)', [naam, icon, type]);
         res.status(201).json({ message: '✅ Categorie toegevoegd' });
     } catch (err) {
         console.error('❌ Fout bij toevoegen van categorie:', err.message);
@@ -24,11 +24,10 @@ exports.addCategory = async (req, res) => {
     }
 };
 
-
 // API: Wijzig een categorie
 exports.updateCategory = async (req, res) => {
     const { id } = req.params;
-    const { naam, icon } = req.body;
+    const { naam, icon, type } = req.body;
 
     if (!naam) {
         return res.status(400).json({ error: '❌ Naam van de categorie is vereist' });
@@ -36,8 +35,8 @@ exports.updateCategory = async (req, res) => {
 
     try {
         const result = await pool.query(
-            'UPDATE categories SET naam = $1, icon = $2 WHERE id = $3',
-            [naam, icon, id]
+            'UPDATE categories SET naam = $1, icon = $2, type = $3 WHERE id = $4',
+            [naam, icon, type, id]
         );
 
         if (result.rowCount === 0) {
@@ -89,4 +88,3 @@ exports.suggestCategories = async (req, res) => {
         res.status(500).json({ error: '❌ Serverfout bij ophalen categorie-suggesties.' });
     }
 };
-

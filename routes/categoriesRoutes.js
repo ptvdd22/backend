@@ -23,7 +23,4 @@ router.delete('/:id', deleteCategory);
 // Haal suggesties voor categorieën
 router.get('/suggest', suggestCategories);
 
-
-
-
 module.exports = router;
