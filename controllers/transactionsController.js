@@ -2,8 +2,10 @@ const pool = require('../db');
 const fs = require('fs');
 const csvParser = require('csv-parser');
 
-// Haal alle transacties op
+// Haal alle transacties op met filters
 exports.getAllTransactions = async (req, res) => {
+    const { startDate, endDate, category, label, person } = req.query;
+
     try {
         const query = `
             SELECT 
@@ -22,15 +24,31 @@ exports.getAllTransactions = async (req, res) => {
             FROM transactions t
             LEFT JOIN categories c ON t.category_id = c.id
             LEFT JOIN labels l ON t.label_id = l.id
+            WHERE 
+                ($1::DATE IS NULL OR t.transactiedatum >= $1) AND
+                ($2::DATE IS NULL OR t.transactiedatum <= $2) AND
+                ($3::TEXT IS NULL OR LOWER(c.naam) = LOWER($3)) AND
+                ($4::TEXT IS NULL OR LOWER(l.naam) = LOWER($4)) AND
+                ($5::TEXT IS NULL OR LOWER(t.person) LIKE LOWER($5))
             ORDER BY t.transactiedatum DESC;
         `;
-        const { rows } = await pool.query(query);
+
+        const values = [
+            startDate || null,
+            endDate || null,
+            category || null,
+            label || null,
+            person ? `%${person}%` : null,
+        ];
+
+        const { rows } = await pool.query(query, values);
         res.status(200).json(rows);
     } catch (err) {
         console.error('❌ Fout bij ophalen van transacties:', err.message);
         res.status(500).json({ error: '❌ Serverfout bij ophalen transacties' });
     }
 };
+
 
 // Update transactie
 exports.updateTransaction = async (req, res) => {

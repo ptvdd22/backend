@@ -6,42 +6,106 @@ const pool = require('../db');
 exports.getCategoryExpenses = async (req, res) => {
   try {
       const query = `
-        SELECT 
-            c.naam AS category,
-            COALESCE(SUM(CASE 
-                WHEN DATE_PART('month', t.transactiedatum) = DATE_PART('month', CURRENT_DATE) 
-                THEN CASE 
-                        WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag 
-                        WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag 
-                        WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag 
-                        WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag 
-                        ELSE 0 
-                    END 
-                ELSE 0 
-            END), 0)::NUMERIC AS current_month,
-            COALESCE(SUM(CASE 
-                WHEN DATE_PART('month', t.transactiedatum) = DATE_PART('month', CURRENT_DATE) - 1 
-                THEN CASE 
-                        WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag 
-                        WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag 
-                        WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag 
-                        WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag 
-                        ELSE 0 
-                    END 
-                ELSE 0 
-            END), 0)::NUMERIC AS previous_month,
-            COALESCE(SUM(CASE 
-                WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag 
-                WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag 
-                WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag 
-                WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag 
-                ELSE 0 
-            END) / NULLIF(EXTRACT(YEAR FROM AGE(MIN(t.transactiedatum))) * 12 
-                + EXTRACT(MONTH FROM AGE(MIN(t.transactiedatum))), 0), 0)::NUMERIC AS average_per_month
-        FROM categories c
-        LEFT JOIN transactions t ON c.id = t.category_id
-        GROUP BY c.naam
-        ORDER BY c.naam;
+                WITH monthly_totals AS (
+                -- Bereken het totaalbedrag per maand per categorie
+                SELECT 
+                    c.naam AS category,
+                    date_trunc('month', t.transactiedatum) AS month,
+                    SUM(CASE
+                        WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag
+                        WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag
+                        WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag
+                        WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag
+                        ELSE 0
+                    END) AS total
+                FROM 
+                    categories c
+                LEFT JOIN 
+                    transactions t 
+                ON 
+                    c.id = t.category_id
+                WHERE 
+                    t.transactiedatum < date_trunc('month', CURRENT_DATE) -- Alleen maanden vóór de huidige maand
+                GROUP BY 
+                    c.naam, date_trunc('month', t.transactiedatum)
+            ),
+            category_summaries AS (
+                -- Sommeer de maandelijkse totalen per categorie en tel het aantal maanden
+                SELECT 
+                    category,
+                    SUM(total) AS total_sum,
+                    COUNT(DISTINCT month) AS total_months
+                FROM 
+                    monthly_totals
+                GROUP BY 
+                    category
+            ),
+            previous_month_totals AS (
+                -- Bereken de totalen van de vorige maand per categorie
+                SELECT 
+                    c.naam AS category,
+                    SUM(CASE
+                        WHEN date_trunc('month', t.transactiedatum) = date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
+                        THEN CASE
+                            WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag
+                            WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag
+                            WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag
+                            WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag
+                            ELSE 0
+                        END
+                        ELSE 0
+                    END) AS previous_month_total
+                FROM 
+                    categories c
+                LEFT JOIN 
+                    transactions t 
+                ON 
+                    c.id = t.category_id
+                GROUP BY 
+                    c.naam
+            ),
+            current_month_totals AS (
+                -- Bereken de totalen van de huidige maand per categorie
+                SELECT 
+                    c.naam AS category,
+                    SUM(CASE
+                        WHEN date_trunc('month', t.transactiedatum) = date_trunc('month', CURRENT_DATE)
+                        THEN CASE
+                            WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag
+                            WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag
+                            WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag
+                            WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag
+                            ELSE 0
+                        END
+                        ELSE 0
+                    END) AS current_month_total
+                FROM 
+                    categories c
+                LEFT JOIN 
+                    transactions t 
+                ON 
+                    c.id = t.category_id
+                GROUP BY 
+                    c.naam
+            )
+            -- Combineer alles: huidige maand, vorige maand, gemiddelde per maand
+            SELECT 
+                cs.category,
+                COALESCE(cm.current_month_total, 0)::NUMERIC(10, 2) AS current_month_total,
+                COALESCE(pm.previous_month_total, 0)::NUMERIC(10, 2) AS previous_month_total,
+                ROUND(cs.total_sum::NUMERIC / NULLIF(cs.total_months, 0), 2) AS average_per_month
+            FROM 
+                category_summaries cs
+            LEFT JOIN 
+                previous_month_totals pm
+            ON 
+                cs.category = pm.category
+            LEFT JOIN 
+                current_month_totals cm
+            ON 
+                cs.category = cm.category
+            ORDER BY 
+                cs.category;
 
       `;
 
@@ -58,64 +122,111 @@ exports.getCategoryExpenses = async (req, res) => {
 exports.getExpensesEndingIn11 = async (req, res) => {
   try {
     const query = `
-      SELECT 
-          c.naam AS category,
-          COALESCE(
-              SUM(
-                  CASE 
-                      WHEN date_trunc('month', t.transactiedatum) = date_trunc('month', CURRENT_DATE)
-                      THEN CASE
-                              WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag
-                              WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag
-                              WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag
-                              WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag
-                              ELSE 0
-                          END
-                      ELSE 0
-                  END
-              ),
-              0
-          )::NUMERIC AS current_month,
-          COALESCE(
-              SUM(
-                  CASE 
-                      WHEN date_trunc('month', t.transactiedatum) = date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
-                      THEN CASE
-                              WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag
-                              WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag
-                              WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag
-                              WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag
-                              ELSE 0
-                          END
-                      ELSE 0
-                  END
-              ),
-              0
-          )::NUMERIC AS previous_month,
-          COALESCE(
-              SUM(
-                  CASE
-                      WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag
-                      WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag
-                      WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag
-                      WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag
-                      ELSE 0
-                  END
-              ) 
-              / NULLIF(
-                  EXTRACT(YEAR FROM AGE(MIN(t.transactiedatum))) * 12 
-                  + EXTRACT(MONTH FROM AGE(MIN(t.transactiedatum))),
-                  0
-              ),
-              0
-          )::NUMERIC AS average_per_month
-      FROM categories c
-      INNER JOIN transactions t 
-          ON c.id = t.category_id
-        AND t.rekeningnummer LIKE '%11'
-      GROUP BY c.naam
-      ORDER BY c.naam;
-
+        WITH monthly_totals AS (
+        -- Bereken het totaalbedrag per maand per categorie
+        SELECT 
+            c.naam AS category,
+            date_trunc('month', t.transactiedatum) AS month,
+            SUM(CASE
+                WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag
+                WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag
+                WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag
+                WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag
+                ELSE 0
+            END) AS total
+        FROM 
+            categories c
+        LEFT JOIN 
+            transactions t 
+        ON 
+            c.id = t.category_id
+        WHERE 
+            t.transactiedatum < date_trunc('month', CURRENT_DATE) -- Alleen maanden vóór de huidige maand
+            AND t.rekeningnummer LIKE '%11' -- Filter op rekeningnummer eindigend op 11
+        GROUP BY 
+            c.naam, date_trunc('month', t.transactiedatum)
+    ),
+    category_summaries AS (
+        -- Sommeer de maandelijkse totalen per categorie en tel het aantal maanden
+        SELECT 
+            category,
+            SUM(total) AS total_sum,
+            COUNT(DISTINCT month) AS total_months
+        FROM 
+            monthly_totals
+        GROUP BY 
+            category
+    ),
+    previous_month_totals AS (
+        -- Bereken de totalen van de vorige maand per categorie
+        SELECT 
+            c.naam AS category,
+            SUM(CASE
+                WHEN date_trunc('month', t.transactiedatum) = date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
+                THEN CASE
+                    WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag
+                    WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag
+                    WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag
+                    WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag
+                    ELSE 0
+                END
+                ELSE 0
+            END) AS previous_month_total
+        FROM 
+            categories c
+        LEFT JOIN 
+            transactions t 
+        ON 
+            c.id = t.category_id
+        WHERE 
+            t.rekeningnummer LIKE '%11' -- Filter op rekeningnummer eindigend op 11
+        GROUP BY 
+            c.naam
+    ),
+    current_month_totals AS (
+        -- Bereken de totalen van de huidige maand per categorie
+        SELECT 
+            c.naam AS category,
+            SUM(CASE
+                WHEN date_trunc('month', t.transactiedatum) = date_trunc('month', CURRENT_DATE)
+                THEN CASE
+                    WHEN c.type = 'kosten' AND t.creditdebet = 'D' THEN t.bedrag
+                    WHEN c.type = 'kosten' AND t.creditdebet = 'C' THEN -t.bedrag
+                    WHEN c.type = 'opbrengsten' AND t.creditdebet = 'C' THEN t.bedrag
+                    WHEN c.type = 'opbrengsten' AND t.creditdebet = 'D' THEN -t.bedrag
+                    ELSE 0
+                END
+                ELSE 0
+            END) AS current_month_total
+        FROM 
+            categories c
+        LEFT JOIN 
+            transactions t 
+        ON 
+            c.id = t.category_id
+        WHERE 
+            t.rekeningnummer LIKE '%11' -- Filter op rekeningnummer eindigend op 11
+        GROUP BY 
+            c.naam
+    )
+    -- Combineer alles: huidige maand, vorige maand, gemiddelde per maand
+    SELECT 
+        cs.category,
+        COALESCE(cm.current_month_total, 0)::NUMERIC(10, 2) AS current_month_total,
+        COALESCE(pm.previous_month_total, 0)::NUMERIC(10, 2) AS previous_month_total,
+        ROUND(cs.total_sum::NUMERIC / NULLIF(cs.total_months, 0), 2) AS average_per_month
+    FROM 
+        category_summaries cs
+    LEFT JOIN 
+        previous_month_totals pm
+    ON 
+        cs.category = pm.category
+    LEFT JOIN 
+        current_month_totals cm
+    ON 
+        cs.category = cm.category
+    ORDER BY 
+        cs.category;
 
     `;
         
