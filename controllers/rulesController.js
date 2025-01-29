@@ -22,47 +22,6 @@ exports.addRule = async (req, res) => {
     }
 };
 
-
-// Pas regels toe op transacties
-exports.applyRules = async (req, res) => {
-    try {
-        const rules = await pool.query(`
-            SELECT 
-                r.id, 
-                r.tegenrekeningnummer, 
-                r.tegenrekeninghouder, 
-                r.category_id, 
-                r.person,
-                r.label_id
-            FROM rules r
-        `);
-
-        console.log('📊 Regels opgehaald:', rules.rows);
-
-        for (const rule of rules.rows) {
-            const categoryId = rule.category_id || null;
-            const labelId = rule.label_id || null;
-
-            await pool.query(
-                `UPDATE transactions
-                 SET category_id = $1, 
-                     label_id = $2,
-                     person = $3
-                 WHERE (tegenrekeninghouder = $4 OR tegenrekeningnummer = $5)`,
-                [rule.category_id, rule.label_id, rule.person || null, rule.tegenrekeninghouder, rule.tegenrekeningnummer]
-            );
-            
-
-            console.log(`✅ Regel toegepast voor ID: ${rule.id}`);
-        }
-
-        res.status(200).json({ message: '✅ Regels succesvol toegepast!' });
-    } catch (err) {
-        console.error('❌ Fout bij toepassen van regels:', err.message);
-        res.status(500).json({ error: '❌ Serverfout bij toepassen van regels' });
-    }
-};
-
 // Haal alle regels op
 exports.getRules = async (req, res) => {
     try {
@@ -85,7 +44,6 @@ exports.getRules = async (req, res) => {
         res.status(500).json({ error: '❌ Serverfout bij ophalen regels' });
     }
 };
-
 
 // Verwijder een regel
 exports.deleteRule = async (req, res) => {
@@ -142,77 +100,4 @@ exports.updateRule = async (req, res) => {
         console.error('❌ Fout bij bijwerken van regel:', err.message);
         res.status(500).json({ error: '❌ Serverfout bij bijwerken van regel.' });
     }
-};
-
-
-
-// checkt of er regels zijn voor import
-exports.applyRules = async (req, res) => {
-    try {
-        const rules = await pool.query(`
-            SELECT 
-                r.id, 
-                r.tegenrekeningnummer, 
-                r.tegenrekeninghouder, 
-                r.category_id, 
-                r.person,
-                r.label_id
-            FROM rules r
-        `);
-
-        console.log('📊 Regels opgehaald:', rules.rows);
-
-        let rulesApplied = 0;
-
-        for (const rule of rules.rows) {
-            const result = await pool.query(
-                `UPDATE transactions
-                 SET category_id = $1, 
-                     label_id = $2,
-                     person = $3
-                 WHERE (tegenrekeninghouder = $4 OR tegenrekeningnummer = $5)`,
-                [rule.category_id, rule.label_id, rule.person || null, rule.tegenrekeninghouder, rule.tegenrekeningnummer]
-            );
-            rulesApplied += result.rowCount; // Tel het aantal bijgewerkte transacties
-        }
-        
-        res.status(200).json({
-            message: '✅ Regels succesvol toegepast!',
-            rulesApplied, // Dit moet het totaal aantal toegepaste regels bevatten
-        });
-        
-    } catch (err) {
-        console.error('❌ Fout bij toepassen van regels:', err.message);
-        res.status(500).json({ error: '❌ Fout bij toepassen van regels' });
-    }
-
-    exports.getCategorySuggestions = async (req, res) => {
-        const { query } = req.query; // Haal de zoekterm uit de querystring
-        if (!query || query.trim() === '') {
-            return res.status(400).json({ error: 'Query mag niet leeg zijn' });
-        }
-    
-        try {
-            const categories = await pool.query(
-                'SELECT id, naam FROM categories WHERE naam ILIKE $1',
-                [`%${query}%`]
-            );
-            res.status(200).json(categories.rows);
-        } catch (err) {
-            console.error('❌ Fout bij ophalen categorie-suggesties:', err.message);
-            res.status(500).json({ error: 'Serverfout bij ophalen categorie-suggesties.' });
-        }
-    };
-    
-    
-    exports.getLabelSuggestions = async (req, res) => {
-        const { query = '' } = req.query;
-        try {
-            const labels = await pool.query(`SELECT id, naam FROM labels WHERE naam ILIKE $1`, [`%${query}%`]);
-            res.status(200).json(labels.rows);
-        } catch (err) {
-            res.status(500).json({ error: 'Serverfout bij ophalen van labels' });
-        }
-    };
-    
 };

@@ -1,6 +1,4 @@
 const pool = require('../db');
-const fs = require('fs');
-const csvParser = require('csv-parser');
 
 // Haal alle transacties op met filters
 exports.getAllTransactions = async (req, res) => {
@@ -27,9 +25,15 @@ exports.getAllTransactions = async (req, res) => {
             WHERE 
                 ($1::DATE IS NULL OR t.transactiedatum >= $1) AND
                 ($2::DATE IS NULL OR t.transactiedatum <= $2) AND
-                ($3::TEXT IS NULL OR LOWER(c.naam) = LOWER($3)) AND
-                ($4::TEXT IS NULL OR LOWER(l.naam) = LOWER($4)) AND
-                ($5::TEXT IS NULL OR LOWER(t.person) LIKE LOWER($5))
+                ($3::TEXT IS NULL OR 
+                    ($3 = 'no-category' AND t.category_id IS NULL) OR 
+                    (LOWER(c.naam) = LOWER($3))) AND
+                ($4::TEXT IS NULL OR 
+                    ($4 = 'no-label' AND t.label_id IS NULL) OR 
+                    (LOWER(l.naam) = LOWER($4))) AND
+                ($5::TEXT IS NULL OR 
+                    ($5 = 'no-person' AND t.person IS NULL) OR 
+                    (LOWER(t.person) LIKE LOWER($5)))
             ORDER BY t.transactiedatum DESC;
         `;
 
@@ -38,7 +42,7 @@ exports.getAllTransactions = async (req, res) => {
             endDate || null,
             category || null,
             label || null,
-            person ? `%${person}%` : null,
+            person === 'no-person' ? 'no-person' : person ? `%${person}%` : null,
         ];
 
         const { rows } = await pool.query(query, values);
@@ -48,7 +52,6 @@ exports.getAllTransactions = async (req, res) => {
         res.status(500).json({ error: '❌ Serverfout bij ophalen transacties' });
     }
 };
-
 
 // Update transactie
 exports.updateTransaction = async (req, res) => {
@@ -82,17 +85,6 @@ exports.updateTransaction = async (req, res) => {
     }
 };
 
-function parseDate(dateStr) {
-    if (!dateStr) return null;
-    const regex = /^\d{2}-\d{2}-\d{4}$/; // Verwacht formaat: DD-MM-YYYY
-    if (!regex.test(dateStr)) {
-        console.warn(`⚠️ Ongeldig datumformaat: ${dateStr}`);
-        return null;
-    }
-    const [day, month, year] = dateStr.split('-');
-    return `${year}-${month}-${day}`; // YYYY-MM-DD
-}
-
 // Haal categorieën op
 exports.getCategories = async (req, res) => {
     try {
@@ -125,132 +117,6 @@ exports.getLabels = async (req, res) => {
     }
 };
 
-// Importeer transacties vanuit een CSV-bestand met duplicate check
-exports.importTransactions = async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: '❌ Geen bestand geüpload.' });
-    }
-
-    const filePath = req.file.path;
-    let transactionsImported = 0;
-    let skippedRows = 0;
-    let duplicateReferences = [];
-    let allReferences = [];
-    const validTransactions = [];
-
-    try {
-        const stream = fs.createReadStream(filePath).pipe(csvParser({ separator: ';' }));
-
-        // Stap 1: Lees en valideer alle rijen uit het bestand
-        for await (const row of stream) {
-            const referentie = row['Referentie']?.trim() || null;
-            const rekeningnummer = row['Rekeningnummer']?.trim() || null;
-            const transactiedatum = parseDate(row['Transactiedatum']) || null;
-            const valutacode = row['Valutacode']?.trim() || null;
-            const creditdebet = row['CreditDebet']?.trim() || null;
-            const bedrag = row['Bedrag'] ? parseFloat(row['Bedrag'].replace(',', '.')) : null;
-            const tegenrekeningnummer = row['Tegenrekeningnummer']?.trim() || null;
-            const tegenrekeninghouder = row['Tegenrekeninghouder']?.trim() || null;
-            const valutadatum = parseDate(row['Valutadatum']) || null;
-            const betaalwijze = row['Betaalwijze']?.trim() || null;
-            const omschrijving = row['Omschrijving']?.trim() || null;
-            const typeBetaling = row['Type betaling']?.trim() || null;
-            const machtigingsnummer = row['Machtigingsnummer']?.trim() || null;
-            const incassantId = row['Incassant ID']?.trim() || null;
-            const adres = row['Adres']?.trim() || null;
-            const boekdatum = parseDate(row['Boekdatum']) || null;
-
-            if (!referentie || !rekeningnummer || !transactiedatum || !bedrag) {
-                skippedRows++;
-                console.warn('⚠️ Rij overgeslagen vanwege ontbrekende verplichte velden:', row);
-                continue;
-            }
-
-            allReferences.push(referentie);
-            validTransactions.push({
-                rekeningnummer,
-                transactiedatum,
-                valutacode,
-                creditdebet,
-                bedrag,
-                tegenrekeningnummer,
-                tegenrekeninghouder,
-                valutadatum,
-                betaalwijze,
-                omschrijving,
-                typeBetaling,
-                machtigingsnummer,
-                incassantId,
-                adres,
-                referentie,
-                boekdatum,
-            });
-        }
-
-        // Stap 2: Controleer op dubbele referenties in de database
-        const { rows: existingRows } = await pool.query(
-            `SELECT referentie FROM transactions WHERE referentie = ANY($1)`,
-            [allReferences]
-        );
-
-        const existingReferences = existingRows.map(row => row.referentie);
-
-        // Stap 3: Voeg unieke transacties toe
-        const promises = validTransactions.map(async (transaction) => {
-            if (existingReferences.includes(transaction.referentie)) {
-                skippedRows++;
-                duplicateReferences.push(transaction.referentie);
-                console.warn(`⚠️ Dubbele transactie overgeslagen: Referentie ${transaction.referentie}`);
-                return;
-            }
-
-            try {
-                await pool.query(
-                    `INSERT INTO transactions (
-                        rekeningnummer, transactiedatum, valutacode, creditdebet, bedrag,
-                        tegenrekeningnummer, tegenrekeninghouder, valutadatum, betaalwijze,
-                        omschrijving, type_betaling, machtigingsnummer, incassant_id,
-                        adres, referentie, boekdatum
-                    ) VALUES (
-                        $1, $2, $3, $4, $5,
-                        $6, $7, $8, $9,
-                        $10, $11, $12, $13,
-                        $14, $15, $16
-                    )`,
-                    [
-                        transaction.rekeningnummer, transaction.transactiedatum, transaction.valutacode,
-                        transaction.creditdebet, transaction.bedrag, transaction.tegenrekeningnummer,
-                        transaction.tegenrekeninghouder, transaction.valutadatum, transaction.betaalwijze,
-                        transaction.omschrijving, transaction.typeBetaling, transaction.machtigingsnummer,
-                        transaction.incassantId, transaction.adres, transaction.referentie,
-                        transaction.boekdatum,
-                    ]
-                );
-                transactionsImported++;
-                console.log(`✅ Transactie toegevoegd: ${transaction.referentie}`);
-            } catch (err) {
-                skippedRows++;
-                console.error('❌ Database-insert fout:', err.message);
-            }
-        });
-
-        await Promise.all(promises);
-        fs.unlinkSync(filePath); // Verwijder tijdelijk bestand
-
-        console.log(`✅ Transacties geïmporteerd: ${transactionsImported}`);
-        console.log(`⚠️ Overgeslagen transacties: ${skippedRows}`);
-
-        res.status(200).json({
-            message: '✅ Import succesvol voltooid',
-            transactionsImported,
-            skippedRows,
-            duplicateReferences,
-        });
-    } catch (err) {
-        console.error('❌ Fout bij CSV-import:', err.message);
-        res.status(500).json({ error: `❌ Serverfout bij verwerken bestand: ${err.message}` });
-    }
-};
 
 //  Opslaan split transactie
 

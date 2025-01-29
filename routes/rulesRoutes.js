@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const {
     addRule,
-    applyRules,
     getRules,
     deleteRule,
     updateRule,
@@ -10,9 +9,6 @@ const {
 
 // Voeg een regel toe
 router.post('/', addRule);
-
-// Pas regels toe op transacties
-router.post('/apply', applyRules);
 
 // Haal alle regels op
 router.get('/', getRules);

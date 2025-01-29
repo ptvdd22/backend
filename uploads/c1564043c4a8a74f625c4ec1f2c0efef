@@ -1,0 +1,4 @@
+Rekeningnummer;Transactiedatum;Valutacode;CreditDebet;Bedrag;Tegenrekeningnummer;Tegenrekeninghouder;Valutadatum;Betaalwijze;Omschrijving;Type betaling;Machtigingsnummer;Incassant ID;Adres;Referentie;Boekdatum;
+"NL33KNAB0740197290";"27-01-2025";"EUR";"D";"2,44";" ";"UWV Stationsweg";"27-01-2025";"Betaalautomaat";"GRONINGEN 27-01-2025 12:36 Pas: 0393";"";"";"";"";"C5A27AG29Y000051";"27-01-2025";
+"NL33KNAB0740197290";"26-01-2025";"EUR";"D";"5,2";" ";"NLOVVGJ9KB7BZQQJZQ";"27-01-2025";"Betaalautomaat";"www.ovpay.nl 26-01-2025 09:20 Pas: 0393";"";"";"";"";"C5A27AG1YW000008";"27-01-2025";
+"NL33KNAB0740197290";"27-01-2025";"EUR";"D";"100";"NL83AEGO0769656226";"M. J. Nieuwendijk - Beuving en/of M";"27-01-2025";"Periodieke overboeking";"Beleggen KNAB";"";"";"";"";"C5A27SRA00EA02S3";"27-01-2025";
