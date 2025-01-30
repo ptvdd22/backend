@@ -1,7 +1,9 @@
 const pool = require('../db');
 const fs = require('fs');
 const csvParser = require('csv-parser');
+const { parseDate } = require("../utils/dateUtils");
 
+{/*
 // functie datum omzetten
 
 function parseDate(dateStr) {
@@ -13,7 +15,7 @@ function parseDate(dateStr) {
     }
     const [day, month, year] = dateStr.split('-');
     return `${year}-${month}-${day}`; // YYYY-MM-DD
-}
+} */}
 
 // Importeer transacties vanuit een CSV-bestand met duplicate check en regels
 exports.importTransactions = async (req, res) => {
@@ -26,6 +28,7 @@ exports.importTransactions = async (req, res) => {
     let skippedRows = 0;
     let duplicateReferences = [];
     let allReferences = [];
+    let rulesApplied = 0; 
     const validTransactions = [];
 
     try {
