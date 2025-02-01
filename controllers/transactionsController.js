@@ -2,7 +2,7 @@ const pool = require('../db');
 
 // Haal alle transacties op met filters
 exports.getAllTransactions = async (req, res) => {
-    const { startDate, endDate, category, label, person } = req.query;
+    const { startDate, endDate, category, label, person, rekeningnummer } = req.query;
 
     try {
         const query = `
@@ -33,8 +33,9 @@ exports.getAllTransactions = async (req, res) => {
                     (LOWER(l.naam) = LOWER($4))) AND
                 ($5::TEXT IS NULL OR 
                     ($5 = 'no-person' AND t.person IS NULL) OR 
-                    (LOWER(t.person) LIKE LOWER($5)))
-            ORDER BY t.transactiedatum DESC;
+                    (LOWER(t.person) LIKE LOWER($5))) AND
+                ($6::TEXT IS NULL OR t.rekeningnummer = $6)
+                ORDER BY t.transactiedatum DESC;
         `;
 
         const values = [
@@ -43,6 +44,7 @@ exports.getAllTransactions = async (req, res) => {
             category || null,
             label || null,
             person === 'no-person' ? 'no-person' : person ? `%${person}%` : null,
+            rekeningnummer || null
         ];
 
         const { rows } = await pool.query(query, values);
@@ -116,7 +118,6 @@ exports.getLabels = async (req, res) => {
         res.status(500).json({ error: '❌ Serverfout bij ophalen labels' });
     }
 };
-
 
 //  Opslaan split transactie
 
