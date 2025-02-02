@@ -175,6 +175,7 @@ const handleSaveSplit = async () => {
 
 // split transactie
 
+// split transactie
 exports.splitTransaction = async (req, res) => {
     const { originalId, splits } = req.body;
 
@@ -261,12 +262,16 @@ exports.splitTransaction = async (req, res) => {
         }     
 
         console.log('✅ Gesplitste transacties toegevoegd:', insertedTransactions);
-        res.status(200).json(insertedTransactions);
+        res.status(200).json({
+            deletedId: originalId,
+            newTransactions: insertedTransactions
+        });
     } catch (error) {
         console.error('❌ Backendfout bij splitsen transactie:', error.message);
         res.status(500).json({ error: `❌ Serverfout bij splitsen transactie: ${error.message}` });
     }
 };
+
 
 // transacties zonder categorie
 exports.getUncategorizedTransactions = async (req, res) => {
